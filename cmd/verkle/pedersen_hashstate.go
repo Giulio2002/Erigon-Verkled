@@ -11,6 +11,7 @@ import (
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
+	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/debug"
 	"github.com/ledgerwatch/erigon/core/types/accounts"
@@ -31,12 +32,12 @@ import (
 	return
 }*/
 
-func regeneratePedersenAccounts(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleWriter *VerkleTreeWriter) error {
+func regeneratePedersenAccounts(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleWriter *verkledb.VerkleTreeWriter) error {
 	logPrefix := "PedersenHashedAccounts"
 	start := time.Now()
 	log.Info("Started Generation of Pedersen Hashed Accounts")
 
-	collectorLookup := etl.NewCollector(PedersenHashedAccountsLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
+	collectorLookup := etl.NewCollector(verkledb.PedersenHashedAccountsLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
 	defer collectorLookup.Close()
 
 	plainStateCursor, err := readTx.Cursor(kv.PlainState)
@@ -108,7 +109,7 @@ func regeneratePedersenAccounts(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, ver
 	wg.Wait()
 	close(out)
 
-	collectorLookup.Load(outTx, PedersenHashedAccountsLookup, etl.IdentityLoadFunc, etl.TransformArgs{Quit: context.Background().Done(),
+	collectorLookup.Load(outTx, verkledb.PedersenHashedAccountsLookup, etl.IdentityLoadFunc, etl.TransformArgs{Quit: context.Background().Done(),
 		LogDetailsLoad: func(k, v []byte) (additionalLogArguments []interface{}) {
 			return []interface{}{"key", common.Bytes2Hex(k)}
 		}})
@@ -117,12 +118,12 @@ func regeneratePedersenAccounts(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, ver
 	return nil
 }
 
-func regeneratePedersenStorage(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleWriter *VerkleTreeWriter) error {
+func regeneratePedersenStorage(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleWriter *verkledb.VerkleTreeWriter) error {
 	logPrefix := "PedersenHashedStorage"
 	start := time.Now()
 	log.Info("Started Generation of Pedersen Hashed Storage")
 
-	collectorLookup := etl.NewCollector(PedersenHashedStorageLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
+	collectorLookup := etl.NewCollector(verkledb.PedersenHashedStorageLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
 	defer collectorLookup.Close()
 
 	plainStateCursor, err := readTx.Cursor(kv.PlainState)
@@ -199,7 +200,7 @@ func regeneratePedersenStorage(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verk
 	wg.Wait()
 	close(out)
 
-	collectorLookup.Load(outTx, PedersenHashedStorageLookup, etl.IdentityLoadFunc, etl.TransformArgs{Quit: context.Background().Done(),
+	collectorLookup.Load(outTx, verkledb.PedersenHashedStorageLookup, etl.IdentityLoadFunc, etl.TransformArgs{Quit: context.Background().Done(),
 		LogDetailsLoad: func(k, v []byte) (additionalLogArguments []interface{}) {
 			return []interface{}{"key", common.Bytes2Hex(k)}
 		}})
@@ -208,12 +209,12 @@ func regeneratePedersenStorage(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verk
 	return nil
 }
 
-func regeneratePedersenCode(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleWriter *VerkleTreeWriter) error {
+func regeneratePedersenCode(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleWriter *verkledb.VerkleTreeWriter) error {
 	logPrefix := "PedersenHashedCode"
 	start := time.Now()
 	log.Info("Started Generation of Pedersen Hashed Code")
 
-	collectorLookup := etl.NewCollector(PedersenHashedCodeLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
+	collectorLookup := etl.NewCollector(verkledb.PedersenHashedCodeLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
 	defer collectorLookup.Close()
 
 	plainStateCursor, err := readTx.Cursor(kv.PlainState)
@@ -301,7 +302,7 @@ func regeneratePedersenCode(outTx kv.RwTx, readTx kv.Tx, cfg optionsCfg, verkleW
 	wg.Wait()
 	close(out)
 
-	if err := collectorLookup.Load(outTx, PedersenHashedCodeLookup, etl.IdentityLoadFunc, etl.TransformArgs{Quit: context.Background().Done(),
+	if err := collectorLookup.Load(outTx, verkledb.PedersenHashedCodeLookup, etl.IdentityLoadFunc, etl.TransformArgs{Quit: context.Background().Done(),
 		LogDetailsLoad: func(k, v []byte) (additionalLogArguments []interface{}) {
 			return []interface{}{"key", common.Bytes2Hex(k)}
 		}}); err != nil {
@@ -339,11 +340,11 @@ func RegeneratePedersenHashstate(cfg optionsCfg) error {
 	}
 	defer tx.Rollback()
 
-	if err := initDB(vTx); err != nil {
+	if err := verkledb.InitDB(vTx); err != nil {
 		return err
 	}
 
-	verleWriter := NewVerkleTreeWriter(vTx, cfg.tmpdir)
+	verleWriter := verkledb.NewVerkleTreeWriter(vTx, cfg.tmpdir)
 
 	if err := regeneratePedersenAccounts(vTx, tx, cfg, verleWriter); err != nil {
 		return err

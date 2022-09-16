@@ -1,4 +1,4 @@
-package main
+package verkledb
 
 import "github.com/ledgerwatch/erigon-lib/kv"
 
@@ -20,7 +20,7 @@ var ExtraBuckets = []string{
 	VerkleRoots,
 }
 
-func initDB(tx kv.RwTx) error {
+func InitDB(tx kv.RwTx) error {
 	for _, b := range ExtraBuckets {
 		if err := tx.CreateBucket(b); err != nil {
 			return err

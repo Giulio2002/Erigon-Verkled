@@ -5,6 +5,7 @@ import (
 
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
+	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/log/v3"
 )
@@ -56,7 +57,7 @@ func IncrementVerkleTree(cfg optionsCfg) error {
 	}
 	defer tx.Rollback()
 
-	if err := initDB(vTx); err != nil {
+	if err := verkledb.InitDB(vTx); err != nil {
 		return err
 	}
 

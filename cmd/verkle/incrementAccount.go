@@ -9,6 +9,7 @@ import (
 
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/changeset"
 	"github.com/ledgerwatch/erigon/common/dbutils"
@@ -20,13 +21,13 @@ import (
 func badKeysForAddress(tx kv.RwTx, address common.Address) ([][]byte, error) {
 	var badKeys [][]byte
 	// Delete also code and storage slots that are connected to that account (iterating over lookups is simpe)
-	storageLookupCursor, err := tx.Cursor(PedersenHashedStorageLookup)
+	storageLookupCursor, err := tx.Cursor(verkledb.PedersenHashedStorageLookup)
 	if err != nil {
 		return nil, err
 	}
 	defer storageLookupCursor.Close()
 
-	codeLookupCursor, err := tx.Cursor(PedersenHashedCodeLookup)
+	codeLookupCursor, err := tx.Cursor(verkledb.PedersenHashedCodeLookup)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +53,7 @@ func incrementAccount(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 	logInterval := time.NewTicker(30 * time.Second)
 	logPrefix := "IncrementVerkleAccount"
 
-	collectorLookup := etl.NewCollector(PedersenHashedCodeLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
+	collectorLookup := etl.NewCollector(verkledb.PedersenHashedCodeLookup, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
 	defer collectorLookup.Close()
 
 	jobs := make(chan *regenerateIncrementalPedersenAccountsJob, batchSize)
@@ -74,7 +75,7 @@ func incrementAccount(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 		return err
 	}
 	defer accountCursor.Close()
-	verkleWriter := NewVerkleTreeWriter(vTx, cfg.tmpdir)
+	verkleWriter := verkledb.NewVerkleTreeWriter(vTx, cfg.tmpdir)
 	// Start Goroutine for collection
 	go func() {
 		defer debug.LogPanic()
@@ -189,7 +190,7 @@ func incrementAccount(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 	close(jobs)
 	wg.Wait()
 	close(out)
-	if err := collectorLookup.Load(vTx, PedersenHashedCodeLookup, identityFuncForVerkleTree, etl.TransformArgs{Quit: context.Background().Done(),
+	if err := collectorLookup.Load(vTx, verkledb.PedersenHashedCodeLookup, identityFuncForVerkleTree, etl.TransformArgs{Quit: context.Background().Done(),
 		LogDetailsLoad: func(k, v []byte) (additionalLogArguments []interface{}) {
 			return []interface{}{"key", common.Bytes2Hex(k)}
 		}}); err != nil {

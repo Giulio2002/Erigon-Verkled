@@ -6,6 +6,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
+	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/log/v3"
@@ -48,11 +49,11 @@ func GenerateVerkleTree(cfg optionsCfg) error {
 	}
 	defer tx.Rollback()
 
-	if err := initDB(vTx); err != nil {
+	if err := verkledb.InitDB(vTx); err != nil {
 		return err
 	}
 
-	verkleWriter := NewVerkleTreeWriter(vTx, cfg.tmpdir)
+	verkleWriter := verkledb.NewVerkleTreeWriter(vTx, cfg.tmpdir)
 
 	if err := regeneratePedersenAccounts(vTx, tx, cfg, verkleWriter); err != nil {
 		return err
@@ -65,7 +66,7 @@ func GenerateVerkleTree(cfg optionsCfg) error {
 		return err
 	}
 
-	verkleCollector := etl.NewCollector(VerkleTrie, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
+	verkleCollector := etl.NewCollector(verkledb.VerkleTrie, cfg.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize))
 	defer verkleCollector.Close()
 	// Verkle Tree to be built
 	log.Info("Started Verkle Tree creation")

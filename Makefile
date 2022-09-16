@@ -111,6 +111,7 @@ COMMANDS += sentry
 COMMANDS += state
 COMMANDS += txpool
 COMMANDS += verkle
+COMMANDS += verkle-transition
 
 # build each command using %.cmd rule
 $(COMMANDS): %: %.cmd
