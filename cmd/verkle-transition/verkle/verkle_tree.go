@@ -1,6 +1,7 @@
 package verkle
 
 import (
+	"bytes"
 	"encoding/binary"
 
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
@@ -14,6 +15,37 @@ import (
 )
 
 const maxInsert = 200_000
+
+func badKeysForAddress(tx kv.RwTx, address common.Address) ([][]byte, error) {
+	var badKeys [][]byte
+	// Delete also code and storage slots that are connected to that account (iterating over lookups is simpe)
+	storageLookupCursor, err := tx.Cursor(verkledb.PedersenHashedStorageLookup)
+	if err != nil {
+		return nil, err
+	}
+	defer storageLookupCursor.Close()
+
+	codeLookupCursor, err := tx.Cursor(verkledb.PedersenHashedCodeLookup)
+	if err != nil {
+		return nil, err
+	}
+	defer codeLookupCursor.Close()
+
+	for k, treeKey, err := storageLookupCursor.Seek(address[:]); len(k) >= 20 && bytes.Equal(k[:20], address[:]); k, treeKey, err = storageLookupCursor.Next() {
+		if err != nil {
+			return nil, err
+		}
+		badKeys = append(badKeys, common.CopyBytes(treeKey))
+	}
+
+	for k, treeKey, err := codeLookupCursor.Seek(address[:]); len(k) >= 20 && bytes.Equal(k[:20], address[:]); k, treeKey, err = codeLookupCursor.Next() {
+		if err != nil {
+			return nil, err
+		}
+		badKeys = append(badKeys, common.CopyBytes(treeKey))
+	}
+	return badKeys, nil
+}
 
 func Int256ToVerkleFormat(x *uint256.Int, buffer []byte) {
 	bbytes := x.ToBig().Bytes()
@@ -105,6 +137,67 @@ func (v *VerkleTree) UpdateAccount(versionKey []byte, codeSize uint64, acc accou
 		return err
 	}
 	v.inserted += 4
+	if v.inserted > maxInsert {
+		flushVerkleNode(v.db, v.node)
+		v.inserted = 0
+	}
+	return nil
+}
+
+func (v *VerkleTree) DeleteAccount(versionKey []byte) error {
+	resolver := func(key []byte) ([]byte, error) {
+		return v.db.GetOne(verkledb.VerkleTrie, key)
+	}
+	var codeHashKey, nonceKey, balanceKey, codeSizeKey [32]byte
+	copy(codeHashKey[:], versionKey[:31])
+	copy(nonceKey[:], versionKey[:31])
+	copy(balanceKey[:], versionKey[:31])
+	copy(codeSizeKey[:], versionKey[:31])
+	codeHashKey[31] = vtree.CodeKeccakLeafKey
+	nonceKey[31] = vtree.NonceLeafKey
+	balanceKey[31] = vtree.BalanceLeafKey
+	codeSizeKey[31] = vtree.CodeSizeLeafKey
+
+	// Insert in the tree
+	if err := v.node.Delete(versionKey, resolver); err != nil {
+		return err
+	}
+
+	if err := v.node.Delete(nonceKey[:], resolver); err != nil {
+		return err
+	}
+	if err := v.node.Delete(codeHashKey[:], resolver); err != nil {
+		return err
+	}
+	if err := v.node.Delete(balanceKey[:], resolver); err != nil {
+		return err
+	}
+	if err := v.node.Delete(codeSizeKey[:], resolver); err != nil {
+		return err
+	}
+	v.inserted += 4
+	if v.inserted > maxInsert {
+		flushVerkleNode(v.db, v.node)
+		v.inserted = 0
+	}
+	return nil
+}
+
+func (v *VerkleTree) DeleteCode(tx kv.RwTx, address []byte) error {
+	resolver := func(key []byte) ([]byte, error) {
+		return v.db.GetOne(verkledb.VerkleTrie, key)
+	}
+	badKeys, err := badKeysForAddress(tx, common.BytesToAddress(address))
+	if err != nil {
+		return err
+	}
+
+	for _, badKey := range badKeys {
+		if err := v.node.Delete(badKey, resolver); err != nil {
+			return err
+		}
+		v.inserted++
+	}
 	if v.inserted > maxInsert {
 		flushVerkleNode(v.db, v.node)
 		v.inserted = 0

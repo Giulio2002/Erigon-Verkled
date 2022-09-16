@@ -107,7 +107,7 @@ func incrementAccount(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 			}
 		}
 	}()
-	marker := NewVerkleMarker()
+	marker := verkledb.NewVerkleMarker(true)
 	defer marker.Rollback()
 
 	accountProcessed := 0

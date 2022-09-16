@@ -60,7 +60,7 @@ func incrementStorage(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 			}
 		}
 	}()
-	marker := NewVerkleMarker()
+	marker := verkledb.NewVerkleMarker(true)
 	defer marker.Rollback()
 
 	for k, v, err := storageCursor.Seek(dbutils.EncodeBlockNumber(from)); k != nil; k, v, err = storageCursor.Next() {

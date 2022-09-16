@@ -3,6 +3,7 @@ package verkledb
 import (
 	"encoding/binary"
 
+	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/dbutils"
@@ -41,4 +42,14 @@ func ReadVerkleRoot(tx kv.Tx, blockNum uint64) (common.Hash, error) {
 
 func WriteVerkleRoot(tx kv.RwTx, blockNum uint64, root common.Hash) error {
 	return tx.Put(VerkleRoots, dbutils.EncodeBlockNumber(blockNum), root[:])
+}
+
+func WritePedersenStorageLookup(tx kv.RwTx, addr []byte, storageKey *uint256.Int, treeKey []byte) error {
+	return tx.Put(PedersenHashedStorageLookup, append(addr, storageKey.ToBig().Bytes()...), treeKey)
+}
+
+func WritePedersenCodeLookup(tx kv.RwTx, addr []byte, i uint32, treeKey []byte) error {
+	indexBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(indexBytes, i)
+	return tx.Put(PedersenHashedCodeLookup, append(addr, indexBytes...), treeKey)
 }

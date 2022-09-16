@@ -11,7 +11,7 @@ import (
 	"github.com/ledgerwatch/log/v3"
 )
 
-func analyseOut(cfg verkledb.OptionsCfg) error {
+func analyseOut(cfg verkledb) error {
 	db, err := mdbx.Open(cfg.verkleDb, log.Root(), false)
 	if err != nil {
 		return err
