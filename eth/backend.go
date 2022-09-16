@@ -169,6 +169,9 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 
 	var currentBlock *types.Block
 
+	if config.ForceVerkle {
+		log.Info("Verkle tree will be built in the background forcefully")
+	}
 	// Check if we have an already initialized chain and fall back to
 	// that if so. Otherwise we need to generate a new genesis spec.
 	if err := chainKv.View(context.Background(), func(tx kv.Tx) error {

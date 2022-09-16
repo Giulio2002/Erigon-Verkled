@@ -182,6 +182,10 @@ var (
 		Usage: "Minimum gas price (fee cap) limit to enforce for acceptance into the pool",
 		Value: ethconfig.Defaults.DeprecatedTxPool.PriceLimit,
 	}
+	ForceVerkleFlag = cli.BoolFlag{
+		Name:  "force-verkle",
+		Usage: "Start building the verkle tree regardless",
+	}
 	TxPoolPriceBumpFlag = cli.Uint64Flag{
 		Name:  "txpool.pricebump",
 		Usage: "Price bump percentage to replace an already existing transaction",
@@ -967,6 +971,7 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 			cfg.Miner.Etherbase = common.HexToAddress(etherbase)
 		}
 	}
+	cfg.ForceVerkle = ctx.GlobalBool(ForceVerkleFlag.Name)
 
 	setSigKey := func(ctx *cli.Context, cfg *ethconfig.Config) {
 		if ctx.GlobalIsSet(MinerSigningKeyFileFlag.Name) {

@@ -183,8 +183,8 @@ type Config struct {
 	Snapshot   Snapshot
 	Downloader *downloadercfg.Cfg
 
-	Dirs datadir.Dirs
-
+	Dirs        datadir.Dirs
+	ForceVerkle bool
 	// Address to connect to external snapshot downloader
 	// empty if you want to use internal bittorrent snapshot downloader
 	ExternalSnapshotDownloaderAddr string
