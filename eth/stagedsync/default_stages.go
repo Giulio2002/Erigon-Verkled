@@ -205,6 +205,19 @@ func DefaultStages(ctx context.Context, sm prune.Mode, snapshots SnapshotsCfg, h
 			},
 		},
 		{
+			ID:          stages.VerkleTrieIncarnation,
+			Description: "Generate verkle trie incarnations",
+			Forward: func(firstCycle bool, badBlockUnwind bool, s *StageState, u Unwinder, tx kv.RwTx) error {
+				return SpawnVerkleIncarnation(s, tx, 0 /* toBlock */, txLookup, ctx)
+			},
+			Unwind: func(firstCycle bool, u *UnwindState, s *StageState, tx kv.RwTx) error {
+				return nil
+			},
+			Prune: func(firstCycle bool, p *PruneState, tx kv.RwTx) error {
+				return nil
+			},
+		},
+		{
 			ID:          stages.Issuance,
 			Description: "Issuance computation",
 			Forward: func(firstCycle bool, badBlockUnwind bool, s *StageState, u Unwinder, tx kv.RwTx) error {

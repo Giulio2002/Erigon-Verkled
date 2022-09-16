@@ -106,7 +106,7 @@ func ProcessAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, 
 			return common.Hash{}, err
 		}
 		if !acc.IsEmptyCodeHash() {
-			prevIncarnation, err := verkledb.ReadVerkleIncarnation(tx, common.BytesToAddress(addressBytes))
+			prevIncarnation, err := verkledb.ReadVerkleIncarnation(coreTx, common.BytesToAddress(addressBytes))
 			if err != nil {
 				return common.Hash{}, err
 			}
