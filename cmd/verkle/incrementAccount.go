@@ -153,7 +153,7 @@ func incrementAccount(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 			if err := acc.DecodeForStorage(encodedAccount); err != nil {
 				return err
 			}
-			verkleIncarnation, err := ReadVerkleIncarnation(vTx, address)
+			verkleIncarnation, err := verkledb.ReadVerkleIncarnation(vTx, address)
 			if err != nil {
 				return err
 			}
@@ -197,7 +197,7 @@ func incrementAccount(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 		return err
 	}
 	// Get root
-	root, err := ReadVerkleRoot(tx, from)
+	root, err := verkledb.ReadVerkleRoot(tx, from)
 	if err != nil {
 		return err
 	}
