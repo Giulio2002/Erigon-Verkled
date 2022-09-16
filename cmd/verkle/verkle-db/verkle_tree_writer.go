@@ -16,7 +16,7 @@ import (
 	"github.com/ledgerwatch/log/v3"
 )
 
-func int256ToVerkleFormat(x *uint256.Int, buffer []byte) {
+func Int256ToVerkleFormat(x *uint256.Int, buffer []byte) {
 	bbytes := x.ToBig().Bytes()
 	if len(bbytes) > 0 {
 		for i, b := range bbytes {
@@ -78,7 +78,7 @@ func (v *VerkleTreeWriter) UpdateAccount(versionKey []byte, codeSize uint64, acc
 	balanceKey[31] = vtree.BalanceLeafKey
 	codeSizeKey[31] = vtree.CodeSizeLeafKey
 	// Process values
-	int256ToVerkleFormat(&acc.Balance, balance[:])
+	Int256ToVerkleFormat(&acc.Balance, balance[:])
 	binary.LittleEndian.PutUint64(nonce[:], acc.Nonce)
 	binary.LittleEndian.PutUint64(cs[:], codeSize)
 
@@ -106,6 +106,12 @@ func (v *VerkleTreeWriter) Insert(key, value []byte) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.collector.Collect(key, value)
+}
+
+func (v *VerkleTreeWriter) Delete(key []byte) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.collector.Collect(key, nil)
 }
 
 func (v *VerkleTreeWriter) WriteContractCodeChunks(codeKeys [][]byte, chunks [][]byte) error {
