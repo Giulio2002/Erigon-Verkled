@@ -8,10 +8,11 @@ import (
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/changeset"
 	"github.com/ledgerwatch/erigon/common/dbutils"
+	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
 )
 
-func processStorage(coreTx kv.Tx, tx kv.RwTx, writer *verkledb.VerkleTreeWriter, from uint64, cfg OptionsCfg, prevRoot common.Hash) (common.Hash, error) {
+func processStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg, prevRoot common.Hash) (common.Hash, error) {
 	//logInterval := time.NewTicker(30 * time.Second)
 	//logPrefix := "processing verkle accounts"
 
@@ -49,6 +50,14 @@ func processStorage(coreTx kv.Tx, tx kv.RwTx, writer *verkledb.VerkleTreeWriter,
 			}
 		}
 	}
+	root, err := writer.CommitVerkleTree(prevRoot)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	progress, err := stages.GetStageProgress(coreTx, stages.Execution)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return root, verkledb.WriteVerkleRoot(tx, progress, root)
 
-	return writer.CommitVerkleTree(prevRoot)
 }

@@ -25,7 +25,7 @@ func Int256ToVerkleFormat(x *uint256.Int, buffer []byte) {
 	}
 }
 
-func flushVerkleNode(db kv.RwTx, node verkle.VerkleNode, logInterval *time.Ticker, key []byte) error {
+func FlushVerkleNode(db kv.RwTx, node verkle.VerkleNode, logInterval *time.Ticker, key []byte) error {
 	var err error
 	totalInserted := 0
 	node.(*verkle.InternalNode).Flush(func(node verkle.VerkleNode) {
@@ -211,7 +211,7 @@ func (v *VerkleTreeWriter) CommitVerkleTree(root common.Hash) (common.Hash, erro
 		}
 		insertions++
 		if insertions > insertionBeforeFlushing {
-			if err := flushVerkleNode(v.db, rootNode, logInterval, key); err != nil {
+			if err := FlushVerkleNode(v.db, rootNode, logInterval, key); err != nil {
 				return err
 			}
 			insertions = 0
@@ -221,5 +221,5 @@ func (v *VerkleTreeWriter) CommitVerkleTree(root common.Hash) (common.Hash, erro
 		return common.Hash{}, err
 	}
 	commitment := rootNode.ComputeCommitment().Bytes()
-	return common.BytesToHash(commitment[:]), flushVerkleNode(v.db, rootNode, logInterval, nil)
+	return common.BytesToHash(commitment[:]), FlushVerkleNode(v.db, rootNode, logInterval, nil)
 }

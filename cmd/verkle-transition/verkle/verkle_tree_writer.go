@@ -2,8 +2,8 @@ package verkle
 
 import (
 	"encoding/binary"
+
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
-	"time"
 
 	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
@@ -11,8 +11,9 @@ import (
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/core/types/accounts"
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
-	"github.com/ledgerwatch/log/v3"
 )
+
+const maxInsert = 200_000
 
 func Int256ToVerkleFormat(x *uint256.Int, buffer []byte) {
 	bbytes := x.ToBig().Bytes()
@@ -23,9 +24,8 @@ func Int256ToVerkleFormat(x *uint256.Int, buffer []byte) {
 	}
 }
 
-func flushVerkleNode(db kv.RwTx, node verkle.VerkleNode, logInterval *time.Ticker, key []byte) error {
+func flushVerkleNode(db kv.RwTx, node verkle.VerkleNode) error {
 	var err error
-	totalInserted := 0
 	node.(*verkle.InternalNode).Flush(func(node verkle.VerkleNode) {
 		if err != nil {
 			return
@@ -38,19 +38,14 @@ func flushVerkleNode(db kv.RwTx, node verkle.VerkleNode, logInterval *time.Ticke
 			return
 		}
 		err = db.Put(verkledb.VerkleTrie, rootHash[:], encodedNode)
-		totalInserted++
-		select {
-		case <-logInterval.C:
-			log.Info("Flushing Verkle nodes", "inserted", totalInserted, "key", common.Bytes2Hex(key))
-		default:
-		}
 	})
 	return err
 }
 
 type VerkleTree struct {
-	db   kv.RwTx
-	node verkle.VerkleNode
+	db       kv.RwTx
+	node     verkle.VerkleNode
+	inserted uint64
 }
 
 func NewVerkleTree(db kv.RwTx, tmpdir string, root common.Hash) *VerkleTree {
@@ -109,12 +104,22 @@ func (v *VerkleTree) UpdateAccount(versionKey []byte, codeSize uint64, acc accou
 	if err := v.node.Insert(codeSizeKey[:], cs[:], resolver); err != nil {
 		return err
 	}
+	v.inserted += 4
+	if v.inserted > maxInsert {
+		flushVerkleNode(v.db, v.node)
+		v.inserted = 0
+	}
 	return nil
 }
 
 func (v *VerkleTree) Insert(key, value []byte) error {
 	resolver := func(key []byte) ([]byte, error) {
 		return v.db.GetOne(verkledb.VerkleTrie, key)
+	}
+	v.inserted++
+	if v.inserted > maxInsert {
+		flushVerkleNode(v.db, v.node)
+		v.inserted = 0
 	}
 
 	return v.node.Insert(key, value, resolver)
@@ -124,19 +129,30 @@ func (v *VerkleTree) Delete(key []byte) error {
 	resolver := func(key []byte) ([]byte, error) {
 		return v.db.GetOne(verkledb.VerkleTrie, key)
 	}
+	v.inserted++
+	if v.inserted > maxInsert {
+		flushVerkleNode(v.db, v.node)
+		v.inserted = 0
+	}
 
 	return v.node.Delete(key, resolver)
 }
 
 func (v *VerkleTree) WriteContractCodeChunks(codeKeys [][]byte, chunks [][]byte) error {
+
 	for i, codeKey := range codeKeys {
 		if err := v.Insert(codeKey, chunks[i]); err != nil {
 			return err
 		}
+		v.inserted++
+	}
+	if v.inserted > maxInsert {
+		flushVerkleNode(v.db, v.node)
+		v.inserted = 0
 	}
 	return nil
 }
 
 func (v *VerkleTree) CommitVerkleTree(root common.Hash) (common.Hash, error) {
-
+	return v.node.ComputeCommitment().Bytes(), flushVerkleNode(v.db, v.node)
 }

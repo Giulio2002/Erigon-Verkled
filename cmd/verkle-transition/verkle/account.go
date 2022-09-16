@@ -11,7 +11,7 @@ import (
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
 )
 
-func processAccounts(coreTx kv.Tx, tx kv.RwTx, writer *verkledb.VerkleTreeWriter, from uint64, cfg OptionsCfg) (common.Hash, error) {
+func processAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg) (common.Hash, error) {
 	// TODO: later logging
 	//logInterval := time.NewTicker(30 * time.Second)
 	//logPrefix := "processing verkle accounts"
