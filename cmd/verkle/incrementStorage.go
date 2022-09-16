@@ -142,7 +142,7 @@ func incrementStorage(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 		return err
 	}
 	// Get root
-	root, err := ReadVerkleRoot(tx, from)
+	root, err := verkledb.ReadVerkleRoot(tx, from)
 	if err != nil {
 		return err
 	}
@@ -152,5 +152,5 @@ func incrementStorage(vTx kv.RwTx, tx kv.Tx, cfg optionsCfg, from, to uint64) er
 	}
 	log.Info("Computed verkle root", "root", common.Bytes2Hex(newRoot[:]))
 
-	return WriteVerkleRoot(vTx, to, newRoot)
+	return verkledb.WriteVerkleRoot(vTx, to, newRoot)
 }
