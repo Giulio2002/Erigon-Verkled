@@ -14,7 +14,7 @@ import (
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
 )
 
-const maxInsert = 200_000
+const maxInsert = 50_000
 
 func badKeysForAddress(tx kv.RwTx, address common.Address) ([][]byte, error) {
 	var badKeys [][]byte
@@ -80,7 +80,7 @@ type VerkleTree struct {
 	inserted uint64
 }
 
-func NewVerkleTree(db kv.RwTx, tmpdir string, root common.Hash) *VerkleTree {
+func NewVerkleTree(db kv.RwTx, root common.Hash) *VerkleTree {
 	var rootNode verkle.VerkleNode
 	if root != (common.Hash{}) {
 		nodeEncoded, err := db.GetOne(verkledb.VerkleTrie, root[:])
@@ -145,9 +145,6 @@ func (v *VerkleTree) UpdateAccount(versionKey []byte, codeSize uint64, acc accou
 }
 
 func (v *VerkleTree) DeleteAccount(versionKey []byte) error {
-	resolver := func(key []byte) ([]byte, error) {
-		return v.db.GetOne(verkledb.VerkleTrie, key)
-	}
 	var codeHashKey, nonceKey, balanceKey, codeSizeKey [32]byte
 	copy(codeHashKey[:], versionKey[:31])
 	copy(nonceKey[:], versionKey[:31])
@@ -159,20 +156,20 @@ func (v *VerkleTree) DeleteAccount(versionKey []byte) error {
 	codeSizeKey[31] = vtree.CodeSizeLeafKey
 
 	// Insert in the tree
-	if err := v.node.Delete(versionKey, resolver); err != nil {
+	if err := v.Delete(versionKey); err != nil {
 		return err
 	}
 
-	if err := v.node.Delete(nonceKey[:], resolver); err != nil {
+	if err := v.Delete(nonceKey[:]); err != nil {
 		return err
 	}
-	if err := v.node.Delete(codeHashKey[:], resolver); err != nil {
+	if err := v.Delete(codeHashKey[:]); err != nil {
 		return err
 	}
-	if err := v.node.Delete(balanceKey[:], resolver); err != nil {
+	if err := v.Delete(balanceKey[:]); err != nil {
 		return err
 	}
-	if err := v.node.Delete(codeSizeKey[:], resolver); err != nil {
+	if err := v.Delete(codeSizeKey[:]); err != nil {
 		return err
 	}
 	v.inserted += 4
@@ -184,16 +181,13 @@ func (v *VerkleTree) DeleteAccount(versionKey []byte) error {
 }
 
 func (v *VerkleTree) DeleteCode(tx kv.RwTx, address []byte) error {
-	resolver := func(key []byte) ([]byte, error) {
-		return v.db.GetOne(verkledb.VerkleTrie, key)
-	}
 	badKeys, err := badKeysForAddress(tx, common.BytesToAddress(address))
 	if err != nil {
 		return err
 	}
 
 	for _, badKey := range badKeys {
-		if err := v.node.Delete(badKey, resolver); err != nil {
+		if err := v.Delete(badKey); err != nil {
 			return err
 		}
 		v.inserted++
@@ -222,6 +216,15 @@ func (v *VerkleTree) Delete(key []byte) error {
 	resolver := func(key []byte) ([]byte, error) {
 		return v.db.GetOne(verkledb.VerkleTrie, key)
 	}
+
+	val, err := v.node.Get(key, resolver)
+	if err != nil {
+		return err
+	}
+	if val == nil {
+		return nil
+	}
+
 	v.inserted++
 	if v.inserted > maxInsert {
 		flushVerkleNode(v.db, v.node)

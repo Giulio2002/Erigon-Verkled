@@ -1,6 +1,8 @@
 package verkle
 
 import (
+	"time"
+
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
@@ -10,6 +12,7 @@ import (
 	"github.com/ledgerwatch/erigon/core/types/accounts"
 	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
+	"github.com/ledgerwatch/log/v3"
 )
 
 func getVerkleCodeChunks(address, code []byte) ([][]byte, [][]byte) {
@@ -41,9 +44,9 @@ func getVerkleCodeChunks(address, code []byte) ([][]byte, [][]byte) {
 	return chunks, chunkKeys
 }
 
-func processAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg) (common.Hash, error) {
+func ProcessAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg) (common.Hash, error) {
 	// TODO: later logging
-	//logInterval := time.NewTicker(30 * time.Second)
+	logInterval := time.NewTicker(180 * time.Second)
 	//logPrefix := "processing verkle accounts"
 
 	accountCursor, err := coreTx.CursorDupSort(kv.AccountChangeSet)
@@ -59,11 +62,16 @@ func processAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, 
 	marker := verkledb.NewVerkleMarker(executionProgress != from+1)
 	defer marker.Rollback()
 
-	for k, v, err := accountCursor.Seek(dbutils.EncodeBlockNumber(from + 1)); k != nil; k, v, err = accountCursor.Next() {
+	start := uint64(0)
+	if from != 0 {
+		start = from + 1
+	}
+
+	for k, v, err := accountCursor.Seek(dbutils.EncodeBlockNumber(start)); k != nil; k, v, err = accountCursor.Next() {
 		if err != nil {
 			return common.Hash{}, err
 		}
-		_, addressBytes, _, err := changeset.DecodeAccounts(k, v)
+		blockNum, addressBytes, _, err := changeset.DecodeAccounts(k, v)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -124,8 +132,13 @@ func processAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, 
 		if err := marker.MarkAsDone(addressBytes); err != nil {
 			return common.Hash{}, err
 		}
+		select {
+		case <-logInterval.C:
+			log.Info("Generating Verkle Tree", "number", blockNum)
+		default:
+		}
 	}
-	lastRoot, err := verkledb.ReadVerkleRoot(coreTx, executionProgress)
+	lastRoot, err := verkledb.ReadVerkleRoot(tx, executionProgress)
 	if err != nil {
 		return common.Hash{}, err
 	}

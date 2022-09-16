@@ -4,41 +4,13 @@ import (
 	"context"
 	"flag"
 
-	"github.com/c2h5oh/datasize"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
 	"github.com/ledgerwatch/erigon/cmd/verkle-transition/verkle"
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
+	"github.com/ledgerwatch/erigon/common"
+	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/log/v3"
 )
-
-func analyseOut(cfg verkledb) error {
-	db, err := mdbx.Open(cfg.verkleDb, log.Root(), false)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	tx, err := db.BeginRw(cfg.ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := verkledb.InitDB(tx); err != nil {
-		return err
-	}
-	buckets, err := tx.ListBuckets()
-	if err != nil {
-		return err
-	}
-	for _, bucket := range buckets {
-		size, err := tx.BucketSize(bucket)
-		if err != nil {
-			return err
-		}
-		log.Info("Bucket Analysis", "name", bucket, "size", datasize.ByteSize(size).HumanReadable())
-	}
-	return nil
-}
 
 func main() {
 	ctx := context.Background()
@@ -51,12 +23,69 @@ func main() {
 	flag.Parse()
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StderrHandler))
 
-	opt := verkle.OptionsCfg{
+	cfg := verkle.OptionsCfg{
 		Ctx:             ctx,
 		StateDb:         *mainDb,
 		VerkleDb:        *verkleDb,
 		WorkersCount:    *workersCount,
 		Tmpdir:          *tmpdir,
 		DisabledLookups: *disableLookups,
+	}
+	db, err := mdbx.Open(cfg.StateDb, log.Root(), true)
+	if err != nil {
+		log.Error("Error while opening database", "err", err.Error())
+		return
+	}
+	defer db.Close()
+
+	vDb, err := mdbx.Open(cfg.VerkleDb, log.Root(), false)
+	if err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
+	}
+	defer vDb.Close()
+
+	vTx, err := vDb.BeginRw(cfg.Ctx)
+	if err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
+	}
+	defer vTx.Rollback()
+
+	tx, err := db.BeginRo(cfg.Ctx)
+	if err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
+	}
+	defer tx.Rollback()
+
+	if err := verkledb.InitDB(vTx); err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
+	}
+
+	from, err := stages.GetStageProgress(vTx, stages.VerkleTrie)
+	if err != nil {
+		return
+	}
+
+	root, _ := verkledb.ReadVerkleRoot(vTx, from)
+	verkleTree := verkle.NewVerkleTree(vTx, root)
+	var accRoot common.Hash
+	var storageRoot common.Hash
+
+	if accRoot, err = verkle.ProcessAccounts(tx, vTx, verkleTree, from, cfg); err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
+	}
+	if storageRoot, err = verkle.ProcessStorage(tx, vTx, verkleTree, from, cfg, accRoot); err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
+	}
+	log.Info("Generated", "root", storageRoot)
+
+	if err := vTx.Commit(); err != nil {
+		log.Error("Error while opening db transaction", "err", err.Error())
+		return
 	}
 }

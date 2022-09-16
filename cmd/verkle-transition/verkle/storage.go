@@ -2,6 +2,9 @@ package verkle
 
 import (
 	"encoding/binary"
+	"time"
+
+	"github.com/ledgerwatch/log/v3"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -15,9 +18,9 @@ import (
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
 )
 
-func processStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg, prevRoot common.Hash) (common.Hash, error) {
-	//logInterval := time.NewTicker(30 * time.Second)
-	//logPrefix := "processing verkle accounts"
+func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg, prevRoot common.Hash) (common.Hash, error) {
+	logInterval := time.NewTicker(180 * time.Second)
+
 	storageCursor, err := coreTx.CursorDupSort(kv.StorageChangeSet)
 	if err != nil {
 		return common.Hash{}, err
@@ -31,11 +34,15 @@ func processStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, c
 	marker := verkledb.NewVerkleMarker(executionProgress != from+1)
 	defer marker.Rollback()
 
-	for k, v, err := storageCursor.Seek(dbutils.EncodeBlockNumber(from + 1)); k != nil; k, v, err = storageCursor.Next() {
+	start := uint64(0)
+	if from != 0 {
+		start = from + 1
+	}
+	for k, v, err := storageCursor.Seek(dbutils.EncodeBlockNumber(start)); k != nil; k, v, err = storageCursor.Next() {
 		if err != nil {
 			return common.Hash{}, err
 		}
-		_, chKey, _, err := changeset.DecodeStorage(k, v)
+		blockNum, chKey, _, err := changeset.DecodeStorage(k, v)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -85,6 +92,11 @@ func processStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, c
 			if err := verkledb.WritePedersenStorageLookup(tx, chKey[:20], storageSlot, key); err != nil {
 				return common.Hash{}, err
 			}
+		}
+		select {
+		case <-logInterval.C:
+			log.Info("Generating Verkle Tree Storage", "number", blockNum)
+		default:
 		}
 		if err := marker.MarkAsDone(chKey); err != nil {
 			return common.Hash{}, err
