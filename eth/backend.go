@@ -179,62 +179,6 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 	}
 
 	triggerVerkle := make(chan struct{}, 1)
-	if config.ForceVerkle {
-		log.Info("Verkle tree will be built in the background forcefully")
-		// Go routine for verkle trees
-		go func() {
-			coreTx, err := chainKv.BeginRo(context.Background())
-			if err != nil {
-				panic(err)
-			}
-			tx, err := verkeDb.BeginRw(context.Background())
-			if err != nil {
-				panic(err)
-			}
-			if err := verkledb.InitDB(tx); err != nil {
-				panic(err)
-			}
-			for {
-				<-triggerVerkle
-				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
-				if err != nil {
-					return
-				}
-				fmt.Println("AAA", from-1)
-				root, err := verkledb.ReadVerkleRoot(tx, from-1)
-				if err != nil {
-					panic(err)
-				}
-				verkleTree := verkle.NewVerkleTree(tx, root)
-				var accRoot common.Hash
-				var storageRoot common.Hash
-
-				if accRoot, err = verkle.ProcessAccounts(coreTx, tx, verkleTree, from); err != nil {
-					panic(err)
-				}
-
-				if storageRoot, err = verkle.ProcessStorage(coreTx, tx, verkleTree, from, accRoot); err != nil {
-					panic(err)
-				}
-
-				// Commit to verkle db
-				if err = tx.Commit(); err != nil {
-					panic(err)
-				}
-				tx, err = verkeDb.BeginRw(context.Background())
-				if err != nil {
-					panic(err)
-				}
-				coreTx.Rollback()
-				coreTx, err = chainKv.BeginRo(context.Background())
-				if err != nil {
-					panic(err)
-				}
-
-				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
-			}
-		}()
-	}
 	// Check if we have an already initialized chain and fall back to
 	// that if so. Otherwise we need to generate a new genesis spec.
 	if err := chainKv.View(context.Background(), func(tx kv.Tx) error {
@@ -410,6 +354,65 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 	currentBlockNumber := uint64(0)
 	if currentBlock != nil {
 		currentBlockNumber = currentBlock.NumberU64()
+	}
+
+	if config.ForceVerkle {
+		log.Info("Verkle tree will be built in the background forcefully")
+		// Go routine for verkle trees
+		go func() {
+			coreTx, err := chainKv.BeginRo(context.Background())
+			if err != nil {
+				panic(err)
+			}
+			tx, err := verkeDb.BeginRw(context.Background())
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(chainConfig.MartinBlock.Uint64())
+			if err := verkledb.InitDB(tx); err != nil {
+				panic(err)
+			}
+			for {
+				fmt.Println(stack)
+				<-triggerVerkle
+				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
+				if err != nil {
+					return
+				}
+				fmt.Println("AAA", from-1)
+				root, err := verkledb.ReadVerkleRoot(tx, from-1)
+				if err != nil {
+					panic(err)
+				}
+				verkleTree := verkle.NewVerkleTree(tx, root)
+				var accRoot common.Hash
+				var storageRoot common.Hash
+
+				if accRoot, err = verkle.ProcessAccounts(coreTx, tx, verkleTree, from); err != nil {
+					panic(err)
+				}
+
+				if storageRoot, err = verkle.ProcessStorage(coreTx, tx, verkleTree, from, accRoot); err != nil {
+					panic(err)
+				}
+
+				// Commit to verkle db
+				if err = tx.Commit(); err != nil {
+					panic(err)
+				}
+				tx, err = verkeDb.BeginRw(context.Background())
+				if err != nil {
+					panic(err)
+				}
+				coreTx.Rollback()
+				coreTx, err = chainKv.BeginRo(context.Background())
+				if err != nil {
+					panic(err)
+				}
+
+				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
+			}
+		}()
 	}
 
 	log.Info("Initialising Ethereum protocol", "network", config.NetworkID)

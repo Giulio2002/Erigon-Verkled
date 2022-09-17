@@ -154,6 +154,8 @@ var (
 		LondonBlock:           big.NewInt(0),
 		ArrowGlacierBlock:     nil,
 		Ethash:                nil,
+		MartinBlock:           big.NewInt(400),
+		PapiBlock:             big.NewInt(200),
 		Clique:                &CliqueConfig{Period: 0, Epoch: 30000},
 	}
 
