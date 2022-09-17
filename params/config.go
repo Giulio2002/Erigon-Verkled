@@ -137,7 +137,7 @@ var (
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	AllCliqueProtocolChanges = &ChainConfig{
-		ChainID:               big.NewInt(1337),
+		ChainID:               big.NewInt(1338),
 		Consensus:             CliqueConsensus,
 		HomesteadBlock:        big.NewInt(0),
 		DAOForkBlock:          nil,
@@ -154,8 +154,8 @@ var (
 		LondonBlock:           big.NewInt(0),
 		ArrowGlacierBlock:     nil,
 		Ethash:                nil,
-		MartinBlock:           big.NewInt(50),
-		PapiBlock:             big.NewInt(20),
+		MartinBlock:           big.NewInt(3000),
+		PapiBlock:             big.NewInt(1000),
 		Clique:                &CliqueConfig{Period: 0, Epoch: 30000},
 	}
 
