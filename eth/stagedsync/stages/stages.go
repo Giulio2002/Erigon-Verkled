@@ -39,15 +39,16 @@ var (
 	Translation           SyncStage = "Translation"     // Translation each marked for translation contract (from EVM to TEVM)
 	VerkleTrie            SyncStage = "VerkleTrie"
 	VerkleTrieIncarnation SyncStage = "VerkleTrieIncarnation"
-	IntermediateHashes    SyncStage = "IntermediateHashes"  // Generate intermediate hashes, calculate the state root hash
-	HashState             SyncStage = "HashState"           // Apply Keccak256 to all the keys in the state
-	AccountHistoryIndex   SyncStage = "AccountHistoryIndex" // Generating history index for accounts
-	StorageHistoryIndex   SyncStage = "StorageHistoryIndex" // Generating history index for storage
-	LogIndex              SyncStage = "LogIndex"            // Generating logs index (from receipts)
-	CallTraces            SyncStage = "CallTraces"          // Generating call traces index
-	TxLookup              SyncStage = "TxLookup"            // Generating transactions lookup index
-	Issuance              SyncStage = "WatchTheBurn"        // Compute ether issuance for each block
-	Finish                SyncStage = "Finish"              // Nominal stage after all other stages
+	// TODO: VerkleTrieMartinBlock SyncStage = "VerkleTrieMartinBlock"
+	IntermediateHashes  SyncStage = "IntermediateHashes"  // Generate intermediate hashes, calculate the state root hash
+	HashState           SyncStage = "HashState"           // Apply Keccak256 to all the keys in the state
+	AccountHistoryIndex SyncStage = "AccountHistoryIndex" // Generating history index for accounts
+	StorageHistoryIndex SyncStage = "StorageHistoryIndex" // Generating history index for storage
+	LogIndex            SyncStage = "LogIndex"            // Generating logs index (from receipts)
+	CallTraces          SyncStage = "CallTraces"          // Generating call traces index
+	TxLookup            SyncStage = "TxLookup"            // Generating transactions lookup index
+	Issuance            SyncStage = "WatchTheBurn"        // Compute ether issuance for each block
+	Finish              SyncStage = "Finish"              // Nominal stage after all other stages
 
 	MiningCreateBlock SyncStage = "MiningCreateBlock"
 	MiningExecution   SyncStage = "MiningExecution"

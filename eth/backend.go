@@ -173,68 +173,6 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 
 	var currentBlock *types.Block
 
-	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
-	if err != nil {
-		return nil, err
-	}
-
-	triggerVerkle := make(chan struct{}, 1)
-	if config.ForceVerkle {
-		log.Info("Verkle tree will be built in the background forcefully")
-		// Go routine for verkle trees
-		go func() {
-			coreTx, err := chainKv.BeginRo(context.Background())
-			if err != nil {
-				panic(err)
-			}
-			tx, err := verkeDb.BeginRw(context.Background())
-			if err != nil {
-				panic(err)
-			}
-			if err := verkledb.InitDB(tx); err != nil {
-				panic(err)
-			}
-			for {
-				<-triggerVerkle
-				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
-				if err != nil {
-					return
-				}
-				fmt.Println("AAA", from-1)
-				root, err := verkledb.ReadVerkleRoot(tx, from-1)
-				if err != nil {
-					panic(err)
-				}
-				verkleTree := verkle.NewVerkleTree(tx, root)
-				var accRoot common.Hash
-				var storageRoot common.Hash
-
-				if accRoot, err = verkle.ProcessAccounts(coreTx, tx, verkleTree, from); err != nil {
-					panic(err)
-				}
-
-				if storageRoot, err = verkle.ProcessStorage(coreTx, tx, verkleTree, from, accRoot); err != nil {
-					panic(err)
-				}
-
-				// Commit to verkle db
-				if err = tx.Commit(); err != nil {
-					panic(err)
-				}
-				tx, err = verkeDb.BeginRw(context.Background())
-				if err != nil {
-					panic(err)
-				}
-				coreTx.Rollback()
-				coreTx, err = chainKv.BeginRo(context.Background())
-				if err != nil {
-					panic(err)
-				}
-
-				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
-			}
-		}()
-	}
 	// Check if we have an already initialized chain and fall back to
 	// that if so. Otherwise we need to generate a new genesis spec.
 	if err := chainKv.View(context.Background(), func(tx kv.Tx) error {
@@ -254,6 +192,81 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 	chainConfig, genesis, genesisErr := core.CommitGenesisBlockWithOverride(chainKv, config.Genesis, config.OverrideMergeNetsplitBlock, config.OverrideTerminalTotalDifficulty)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
+	}
+
+	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
+	if err != nil {
+		return nil, err
+	}
+
+	triggerVerkle := make(chan struct{}, 1)
+	if config.ForceVerkle {
+		log.Info("Verkle tree will be built in the background forcefully")
+		// Go routine for verkle trees
+		go func() {
+			coreTx, err := chainKv.BeginRo(context.Background())
+			if err != nil {
+				panic(err)
+			}
+
+			tx, err := verkeDb.BeginRw(context.Background())
+			if err != nil {
+				panic(err)
+			}
+			if err := verkledb.InitDB(tx); err != nil {
+				panic(err)
+			}
+			for {
+				currentBlockNumber, err := stages.GetStageProgress(coreTx, stages.Finish)
+				if err != nil {
+					panic(err)
+				}
+				if currentBlockNumber < chainConfig.MartinBlock.Uint64() {
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+				<-triggerVerkle
+				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
+				if err != nil {
+					return
+				}
+				fmt.Println("AAA", from-1)
+				root, err := verkledb.ReadVerkleRoot(tx, from-1)
+				if err != nil {
+					panic(err)
+				}
+				// TODO: new stage
+				// TODO: Start here
+				verkleTree := verkle.NewVerkleTree(tx, root)
+				var accRoot common.Hash
+				var storageRoot common.Hash
+
+				if accRoot, err = verkle.ProcessAccounts(coreTx, tx, verkleTree, from); err != nil {
+					panic(err)
+				}
+
+				if storageRoot, err = verkle.ProcessStorage(coreTx, tx, verkleTree, from, accRoot); err != nil {
+					panic(err)
+				}
+				// TODO: end here
+
+				// Commit to verkle db
+				if err = tx.Commit(); err != nil {
+					panic(err)
+				}
+				tx, err = verkeDb.BeginRw(context.Background())
+				if err != nil {
+					panic(err)
+				}
+				coreTx.Rollback()
+				coreTx, err = chainKv.BeginRo(context.Background())
+				if err != nil {
+					panic(err)
+				}
+
+				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
+			}
+		}()
 	}
 
 	config.Snapshot.Enabled = ethconfig.UseSnapshotsByChainName(chainConfig.ChainName) && config.Sync.UseSnapshots
