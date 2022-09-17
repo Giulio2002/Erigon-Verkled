@@ -267,6 +267,10 @@ type ChainConfig struct {
 	Aura   *AuRaConfig   `json:"aura,omitempty"`
 	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
 	Bor    *BorConfig    `json:"bor,omitempty"`
+
+	// Verkle
+	PapiBlock   *big.Int `json:"papiBlock,omitempty"`
+	MartinBlock *big.Int `json:"martinBlock,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
