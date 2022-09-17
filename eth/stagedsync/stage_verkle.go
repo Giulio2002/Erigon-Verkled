@@ -2,12 +2,14 @@ package stagedsync
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
 	"github.com/ledgerwatch/erigon/cmd/verkle-transition/verkle"
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
+	"github.com/ledgerwatch/erigon/core/rawdb"
 	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/erigon/params"
 	"github.com/ledgerwatch/log/v3"
@@ -86,8 +88,12 @@ func SpawnVerkle(s *StageState, tx kv.RwTx, toBlock uint64, cfg VerkleCfg, ctx c
 	if storageRoot, err = verkle.ProcessStorage(tx, vTx, verkleTree, progress, accRoot); err != nil {
 		panic(err)
 	}
+	latestHash, _ := rawdb.ReadCanonicalHash(tx, endBlock)
+	latestHeader := rawdb.ReadHeader(tx, latestHash, endBlock)
 	// TODO: end here
-
+	if storageRoot != latestHeader.Root {
+		return fmt.Errorf("invalid verkle tree root, have %s, want %s", latestHeader.Root, storageRoot)
+	}
 	log.Info("Verkle tree progress", "root", storageRoot, "lastStateDiff", progress)
 
 	if !useExternalTx {
