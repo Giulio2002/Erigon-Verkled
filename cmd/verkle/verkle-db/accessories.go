@@ -6,8 +6,9 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/common"
-	"github.com/ledgerwatch/erigon/common/dbutils"
 )
+
+var SavedRoot []byte
 
 func ReadVerkleIncarnation(tx kv.Tx, address common.Address) (uint64, error) {
 	inc, err := tx.GetOne(VerkleIncarnation, address[:])
@@ -32,16 +33,18 @@ func WriteVerkleRootLookup(tx kv.Tx, address common.Address) (uint64, error) {
 }
 
 func ReadVerkleRoot(tx kv.Tx, blockNum uint64) (common.Hash, error) {
-	root, err := tx.GetOne(VerkleIncarnation, dbutils.EncodeBlockNumber(blockNum))
+	/*root, err := tx.GetOne(VerkleIncarnation, dbutils.EncodeBlockNumber(blockNum))
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	return common.BytesToHash(root), nil
+	return common.BytesToHash(root), nil*/
+	return common.BytesToHash(SavedRoot), nil
 }
 
 func WriteVerkleRoot(tx kv.RwTx, blockNum uint64, root common.Hash) error {
-	return tx.Put(VerkleRoots, dbutils.EncodeBlockNumber(blockNum), root[:])
+	copy(SavedRoot, root[:])
+	return nil
 }
 
 func WritePedersenStorageLookup(tx kv.RwTx, addr []byte, storageKey *uint256.Int, treeKey []byte) error {
