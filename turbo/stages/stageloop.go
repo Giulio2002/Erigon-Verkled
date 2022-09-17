@@ -368,6 +368,7 @@ func StateStep(ctx context.Context, batch kv.RwTx, stateSync *stagedsync.Sync, h
 
 func NewStagedSync(ctx context.Context,
 	db kv.RwDB,
+	verkleDb kv.RwDB,
 	p2pCfg p2p.Config,
 	cfg *ethconfig.Config,
 	controlServer *sentry.MultiClient,
@@ -398,7 +399,7 @@ func NewStagedSync(ctx context.Context,
 	}
 
 	return stagedsync.New(
-		stagedsync.DefaultStages(ctx, cfg.Prune,
+		stagedsync.DefaultStages(ctx, verkleDb, cfg.Prune,
 			stagedsync.StageSnapshotsCfg(
 				db,
 				controlServer.Hd,

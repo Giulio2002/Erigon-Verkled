@@ -101,6 +101,8 @@ import (
 // Deprecated: use ethconfig.Config instead.
 type Config = ethconfig.Config
 
+var i = 0
+
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	config *ethconfig.Config
@@ -149,6 +151,7 @@ type Ethereum struct {
 	forkValidator           *engineapi.ForkValidator
 	downloader              *downloader.Downloader
 	triggerVerkleCh         chan struct{}
+	verkleDb                kv.RwDB
 }
 
 // New creates a new Ethereum object (including the
@@ -158,6 +161,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
+	i++
 
 	dirs := stack.Config().Dirs
 	tmpdir := dirs.Tmp
@@ -172,29 +176,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 	}
 
 	var currentBlock *types.Block
-
-	// Check if we have an already initialized chain and fall back to
-	// that if so. Otherwise we need to generate a new genesis spec.
-	if err := chainKv.View(context.Background(), func(tx kv.Tx) error {
-		h, err := rawdb.ReadCanonicalHash(tx, 0)
-		if err != nil {
-			panic(err)
-		}
-		if h != (common.Hash{}) {
-			config.Genesis = nil // fallback to db content
-		}
-		currentBlock = rawdb.ReadCurrentBlock(tx)
-		return nil
-	}); err != nil {
-		panic(err)
-	}
-
-	chainConfig, genesis, genesisErr := core.CommitGenesisBlockWithOverride(chainKv, config.Genesis, config.OverrideMergeNetsplitBlock, config.OverrideTerminalTotalDifficulty)
-	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
-		return nil, genesisErr
-	}
-
-	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
+	verkeDb, err := mdbx.Open("verkledb"+fmt.Sprintf("%d", i), log.Root(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +186,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		log.Info("Verkle tree will be built in the background forcefully")
 		// Go routine for verkle trees
 		go func() {
+			time.Sleep(1 * time.Second)
 			coreTx, err := chainKv.BeginRo(context.Background())
 			if err != nil {
 				panic(err)
@@ -217,11 +200,13 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 				panic(err)
 			}
 			for {
+				h, _ := rawdb.ReadCanonicalHash(tx, 0)
+				c, _ := rawdb.ReadChainConfig(tx, h)
 				currentBlockNumber, err := stages.GetStageProgress(coreTx, stages.Finish)
 				if err != nil {
 					panic(err)
 				}
-				if currentBlockNumber < chainConfig.MartinBlock.Uint64() {
+				if currentBlockNumber < c.MartinBlock.Uint64() {
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
@@ -230,7 +215,6 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 				if err != nil {
 					return
 				}
-				fmt.Println("AAA", from-1)
 				root, err := verkledb.ReadVerkleRoot(tx, from-1)
 				if err != nil {
 					panic(err)
@@ -267,6 +251,26 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
 			}
 		}()
+	}
+
+	// Check if we have an already initialized chain and fall back to
+	// that if so. Otherwise we need to generate a new genesis spec.
+	if err := chainKv.View(context.Background(), func(tx kv.Tx) error {
+		h, err := rawdb.ReadCanonicalHash(tx, 0)
+		if err != nil {
+			panic(err)
+		}
+		if h != (common.Hash{}) {
+			config.Genesis = nil // fallback to db content
+		}
+		currentBlock = rawdb.ReadCurrentBlock(tx)
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+	chainConfig, genesis, genesisErr := core.CommitGenesisBlockWithOverride(chainKv, config.Genesis, config.OverrideMergeNetsplitBlock, config.OverrideTerminalTotalDifficulty)
+	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+		return nil, genesisErr
 	}
 
 	config.Snapshot.Enabled = ethconfig.UseSnapshotsByChainName(chainConfig.ChainName) && config.Sync.UseSnapshots
@@ -324,6 +328,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		config:               config,
 		log:                  logger,
 		chainDB:              chainKv,
+		verkleDb:             verkeDb,
 		networkID:            config.NetworkID,
 		etherbase:            config.Miner.Etherbase,
 		chainConfig:          chainConfig,
@@ -437,18 +442,15 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println(chainConfig.MartinBlock.Uint64())
 			if err := verkledb.InitDB(tx); err != nil {
 				panic(err)
 			}
 			for {
-				fmt.Println(stack)
 				<-triggerVerkle
 				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
 				if err != nil {
 					return
 				}
-				fmt.Println("AAA", from-1)
 				root, err := verkledb.ReadVerkleRoot(tx, from-1)
 				if err != nil {
 					panic(err)
@@ -687,7 +689,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		headCh = make(chan *types.Block, 1)
 	}
 
-	backend.stagedSync, err = stages2.NewStagedSync(backend.sentryCtx, backend.chainDB, stack.Config().P2P, config, backend.sentriesClient, backend.notifications, backend.downloaderClient, allSnapshots, headCh, txNums, agg, backend.forkValidator, triggerVerkle)
+	backend.stagedSync, err = stages2.NewStagedSync(backend.sentryCtx, verkeDb, backend.chainDB, stack.Config().P2P, config, backend.sentriesClient, backend.notifications, backend.downloaderClient, allSnapshots, headCh, txNums, agg, backend.forkValidator, triggerVerkle)
 	if err != nil {
 		return nil, err
 	}
@@ -1034,6 +1036,7 @@ func (s *Ethereum) Stop() error {
 	if s.downloader != nil {
 		s.downloader.Close()
 	}
+	s.verkleDb.Close()
 	if s.privateAPI != nil {
 		shutdownDone := make(chan bool)
 		go func() {

@@ -346,7 +346,7 @@ func MockWithEverything(t *testing.T, gspec *core.Genesis, key *ecdsa.PrivateKey
 	}
 	blockRetire := snapshotsync.NewBlockRetire(1, dirs.Tmp, allSnapshots, mock.DB, snapshotsDownloader, mock.Notifications.Events)
 	mock.Sync = stagedsync.New(
-		stagedsync.DefaultStages(mock.Ctx, prune,
+		stagedsync.DefaultStages(mock.Ctx, nil, prune,
 			stagedsync.StageSnapshotsCfg(
 				mock.DB,
 				mock.sentriesClient.Hd,
