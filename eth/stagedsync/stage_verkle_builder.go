@@ -2,6 +2,7 @@ package stagedsync
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
@@ -21,7 +22,11 @@ func SpawnMiningExecVerkleStage(s *StageState, tx kv.RwTx, cfg MiningExecCfg, ct
 	if cfg.miningState.MiningBlock.Header.Number.Uint64() < params.AllCliqueProtocolChanges.MartinBlock.Uint64() {
 		return nil
 	}
-
+	select {
+	case cfg.verkleCh <- cfg.chainConfig.MartinBlock.Uint64():
+		fmt.Println("lol")
+	default:
+	}
 	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
 	if err != nil {
 		return err

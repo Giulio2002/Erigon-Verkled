@@ -34,6 +34,7 @@ type MiningExecCfg struct {
 	vmConfig    *vm.Config
 	tmpdir      string
 	interrupt   *int32
+	verkleCh    chan uint64
 }
 
 func StageMiningExecCfg(
@@ -45,6 +46,7 @@ func StageMiningExecCfg(
 	vmConfig *vm.Config,
 	tmpdir string,
 	interrupt *int32,
+	verkleCh chan uint64,
 ) MiningExecCfg {
 	return MiningExecCfg{
 		db:          db,
@@ -56,6 +58,7 @@ func StageMiningExecCfg(
 		vmConfig:    vmConfig,
 		tmpdir:      tmpdir,
 		interrupt:   interrupt,
+		verkleCh:    verkleCh,
 	}
 }
 
