@@ -388,7 +388,6 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 			for {
 				curr := <-triggerVerkle
 				if curr < ch.PapiBlock.Uint64() {
-					fmt.Println("here")
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}

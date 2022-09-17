@@ -7,6 +7,7 @@ import (
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/dbutils"
+	"github.com/ledgerwatch/log/v3"
 )
 
 func ReadVerkleIncarnation(tx kv.Tx, address common.Address) (uint64, error) {
@@ -41,6 +42,8 @@ func ReadVerkleRoot(tx kv.Tx, blockNum uint64) (common.Hash, error) {
 }
 
 func WriteVerkleRoot(tx kv.RwTx, blockNum uint64, root common.Hash) error {
+	log.Info("Write Verkle root", "num", blockNum, "root", root)
+
 	return tx.Put(VerkleRoots, dbutils.EncodeBlockNumber(blockNum), root[:])
 }
 

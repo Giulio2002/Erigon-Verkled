@@ -10,7 +10,7 @@ import (
 	"github.com/ledgerwatch/erigon/cmd/verkle-transition/verkle"
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
-	"github.com/ledgerwatch/erigon/core/rawdb"
+	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/erigon/params"
 )
 
@@ -34,9 +34,17 @@ func SpawnMiningExecVerkleStage(s *StageState, tx kv.RwTx, cfg MiningExecCfg, ct
 
 	verkledb.InitDB(vTx)
 
-	defer vTx.Commit()
-	root, _ := verkledb.ReadVerkleRoot(vTx, *rawdb.ReadCurrentBlockNumber(tx))
-	from := *rawdb.ReadCurrentBlockNumber(tx)
+	defer vTx.Rollback()
+	progress, err := stages.GetStageProgress(vTx, verkledb.VerkleTrie)
+	if err != nil {
+		return err
+	}
+
+	root, err := verkledb.ReadVerkleRoot(vTx, progress)
+	if err != nil {
+		panic(err)
+	}
+	from := progress
 	verkleTree := verkle.NewVerkleTree(vTx, root)
 
 	var accRoot common.Hash
