@@ -39,11 +39,14 @@ func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, p
 	if from != 0 {
 		start = from + 1
 	}
+	var blockNum uint64 = from
+	var chKey []byte
+
 	for k, v, err := storageCursor.Seek(dbutils.EncodeBlockNumber(start)); k != nil; k, v, err = storageCursor.Next() {
 		if err != nil {
 			return common.Hash{}, err
 		}
-		blockNum, chKey, _, err := changeset.DecodeStorage(k, v)
+		blockNum, chKey, _, err = changeset.DecodeStorage(k, v)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -107,7 +110,8 @@ func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, p
 	if err != nil {
 		return common.Hash{}, err
 	}
-	fmt.Println(executionProgress)
-	stages.SaveStageProgress(tx, stages.VerkleTrie, executionProgress)
+	fmt.Println(blockNum)
+	stages.SaveStageProgress(tx, stages.VerkleTrie, blockNum)
+	fmt.Println("OOO", blockNum, root)
 	return root, verkledb.WriteVerkleRoot(tx, executionProgress, root)
 }

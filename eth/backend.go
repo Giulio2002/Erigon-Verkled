@@ -200,12 +200,11 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 				if err != nil {
 					return
 				}
-				fmt.Println("FROMMM", from)
+				fmt.Println("AAA", from-1)
 				root, err := verkledb.ReadVerkleRoot(tx, from-1)
 				if err != nil {
 					panic(err)
 				}
-				fmt.Println(root)
 				verkleTree := verkle.NewVerkleTree(tx, root)
 				var accRoot common.Hash
 				var storageRoot common.Hash
