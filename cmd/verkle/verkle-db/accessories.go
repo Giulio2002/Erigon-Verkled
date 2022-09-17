@@ -10,6 +10,8 @@ import (
 	"github.com/ledgerwatch/log/v3"
 )
 
+var SavedRoot []byte
+
 func ReadVerkleIncarnation(tx kv.Tx, address common.Address) (uint64, error) {
 	inc, err := tx.GetOne(VerkleIncarnation, address[:])
 	if err != nil {
@@ -33,12 +35,13 @@ func WriteVerkleRootLookup(tx kv.Tx, address common.Address) (uint64, error) {
 }
 
 func ReadVerkleRoot(tx kv.Tx, blockNum uint64) (common.Hash, error) {
-	root, err := tx.GetOne(VerkleIncarnation, dbutils.EncodeBlockNumber(blockNum))
+	/*root, err := tx.GetOne(VerkleIncarnation, dbutils.EncodeBlockNumber(blockNum))
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	return common.BytesToHash(root), nil
+	return common.BytesToHash(root), nil*/
+	return common.BytesToHash(SavedRoot), nil
 }
 
 func WriteVerkleRoot(tx kv.RwTx, blockNum uint64, root common.Hash) error {
