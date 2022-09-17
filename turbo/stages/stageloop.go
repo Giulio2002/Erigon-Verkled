@@ -72,6 +72,7 @@ func StageLoop(
 	updateHead func(ctx context.Context, head uint64, hash common.Hash, td *uint256.Int),
 	waitForDone chan struct{},
 	loopMinTime time.Duration,
+	verkleCh chan struct{},
 ) {
 	defer close(waitForDone)
 	initialCycle := true
@@ -88,7 +89,7 @@ func StageLoop(
 
 		// Estimate the current top height seen from the peer
 		height := hd.TopSeenHeight()
-		headBlockHash, err := StageLoopStep(ctx, db, sync, height, notifications, initialCycle, updateHead, nil)
+		headBlockHash, err := StageLoopStep(ctx, db, sync, height, notifications, initialCycle, updateHead, nil, verkleCh)
 
 		SendPayloadStatus(hd, headBlockHash, err)
 
@@ -130,6 +131,8 @@ func StageLoopStep(
 	initialCycle bool,
 	updateHead func(ctx context.Context, head uint64, hash common.Hash, td *uint256.Int),
 	snapshotMigratorFinal func(tx kv.Tx) error,
+	verkleCh chan struct{},
+
 ) (headBlockHash common.Hash, err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -176,6 +179,10 @@ func StageLoopStep(
 		errTx := tx.Commit()
 		if errTx != nil {
 			return headBlockHash, errTx
+		}
+		select {
+		case verkleCh <- struct{}{}:
+		default:
 		}
 		log.Info("Commit cycle", "in", time.Since(commitStart))
 	}
@@ -370,6 +377,7 @@ func NewStagedSync(ctx context.Context,
 	headCh chan *types.Block,
 	txNums *exec22.TxNums, agg *state.Aggregator22,
 	forkValidator *engineapi.ForkValidator,
+	verkleCh chan struct{},
 ) (*stagedsync.Sync, error) {
 	dirs := cfg.Dirs
 	var blockReader services.FullBlockReader
@@ -460,7 +468,7 @@ func NewStagedSync(ctx context.Context,
 			stagedsync.StageLogIndexCfg(db, cfg.Prune, dirs.Tmp),
 			stagedsync.StageCallTracesCfg(db, cfg.Prune, 0, dirs.Tmp),
 			stagedsync.StageTxLookupCfg(db, cfg.Prune, dirs.Tmp, snapshots, isBor, sprint),
-			stagedsync.StageFinishCfg(db, dirs.Tmp, headCh, forkValidator), runInTestMode),
+			stagedsync.StageFinishCfg(db, dirs.Tmp, headCh, forkValidator, verkleCh), runInTestMode),
 		stagedsync.DefaultUnwindOrder,
 		stagedsync.DefaultPruneOrder,
 	), nil

@@ -74,11 +74,11 @@ func main() {
 	var accRoot common.Hash
 	var storageRoot common.Hash
 
-	if accRoot, err = verkle.ProcessAccounts(tx, vTx, verkleTree, from, cfg); err != nil {
+	if accRoot, err = verkle.ProcessAccounts(tx, vTx, verkleTree, from); err != nil {
 		log.Error("Error while opening db transaction", "err", err.Error())
 		return
 	}
-	if storageRoot, err = verkle.ProcessStorage(tx, vTx, verkleTree, from, cfg, accRoot); err != nil {
+	if storageRoot, err = verkle.ProcessStorage(tx, vTx, verkleTree, from, accRoot); err != nil {
 		log.Error("Error while opening db transaction", "err", err.Error())
 		return
 	}

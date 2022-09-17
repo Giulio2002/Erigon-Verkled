@@ -2,6 +2,7 @@ package verkle
 
 import (
 	"encoding/binary"
+	"fmt"
 	"time"
 
 	"github.com/ledgerwatch/log/v3"
@@ -18,7 +19,7 @@ import (
 	"github.com/ledgerwatch/erigon/turbo/trie/vtree"
 )
 
-func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg, prevRoot common.Hash) (common.Hash, error) {
+func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, prevRoot common.Hash) (common.Hash, error) {
 	logInterval := time.NewTicker(180 * time.Second)
 
 	storageCursor, err := coreTx.CursorDupSort(kv.StorageChangeSet)
@@ -106,5 +107,7 @@ func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, c
 	if err != nil {
 		return common.Hash{}, err
 	}
+	fmt.Println(executionProgress)
+	stages.SaveStageProgress(tx, stages.VerkleTrie, executionProgress)
 	return root, verkledb.WriteVerkleRoot(tx, executionProgress, root)
 }

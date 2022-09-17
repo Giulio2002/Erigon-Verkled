@@ -44,7 +44,7 @@ func getVerkleCodeChunks(address, code []byte) ([][]byte, [][]byte) {
 	return chunks, chunkKeys
 }
 
-func ProcessAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, cfg OptionsCfg) (common.Hash, error) {
+func ProcessAccounts(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64) (common.Hash, error) {
 	// TODO: later logging
 	logInterval := time.NewTicker(180 * time.Second)
 	//logPrefix := "processing verkle accounts"

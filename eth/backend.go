@@ -41,6 +41,7 @@ import (
 	prototypes "github.com/ledgerwatch/erigon-lib/gointerfaces/types"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon-lib/kv/kvcache"
+	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
 	"github.com/ledgerwatch/erigon-lib/kv/remotedbserver"
 	libstate "github.com/ledgerwatch/erigon-lib/state"
 	txpool2 "github.com/ledgerwatch/erigon-lib/txpool"
@@ -53,6 +54,7 @@ import (
 	"github.com/ledgerwatch/erigon/cmd/rpcdaemon/commands"
 	"github.com/ledgerwatch/erigon/cmd/sentry/sentry"
 	"github.com/ledgerwatch/erigon/cmd/state/exec22"
+	"github.com/ledgerwatch/erigon/cmd/verkle-transition/verkle"
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/debug"
@@ -72,6 +74,7 @@ import (
 	"github.com/ledgerwatch/erigon/eth/ethutils"
 	"github.com/ledgerwatch/erigon/eth/protocols/eth"
 	"github.com/ledgerwatch/erigon/eth/stagedsync"
+	"github.com/ledgerwatch/erigon/eth/stagedsync/stages"
 	"github.com/ledgerwatch/erigon/ethdb/privateapi"
 	"github.com/ledgerwatch/erigon/ethdb/prune"
 	"github.com/ledgerwatch/erigon/ethstats"
@@ -145,6 +148,7 @@ type Ethereum struct {
 	notifyMiningAboutNewTxs chan struct{}
 	forkValidator           *engineapi.ForkValidator
 	downloader              *downloader.Downloader
+	triggerVerkleCh         chan struct{}
 }
 
 // New creates a new Ethereum object (including the
@@ -169,8 +173,68 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 
 	var currentBlock *types.Block
 
+	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
+	if err != nil {
+		return nil, err
+	}
+
+	triggerVerkle := make(chan struct{}, 1)
 	if config.ForceVerkle {
 		log.Info("Verkle tree will be built in the background forcefully")
+		// Go routine for verkle trees
+		go func() {
+			coreTx, err := chainKv.BeginRo(context.Background())
+			if err != nil {
+				panic(err)
+			}
+			tx, err := verkeDb.BeginRw(context.Background())
+			if err != nil {
+				panic(err)
+			}
+			if err := verkledb.InitDB(tx); err != nil {
+				panic(err)
+			}
+			for {
+				<-triggerVerkle
+				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
+				if err != nil {
+					return
+				}
+				fmt.Println("FROMMM", from)
+				root, err := verkledb.ReadVerkleRoot(tx, from-1)
+				if err != nil {
+					panic(err)
+				}
+				fmt.Println(root)
+				verkleTree := verkle.NewVerkleTree(tx, root)
+				var accRoot common.Hash
+				var storageRoot common.Hash
+
+				if accRoot, err = verkle.ProcessAccounts(coreTx, tx, verkleTree, from); err != nil {
+					panic(err)
+				}
+
+				if storageRoot, err = verkle.ProcessStorage(coreTx, tx, verkleTree, from, accRoot); err != nil {
+					panic(err)
+				}
+
+				// Commit to verkle db
+				if err = tx.Commit(); err != nil {
+					panic(err)
+				}
+				tx, err = verkeDb.BeginRw(context.Background())
+				if err != nil {
+					panic(err)
+				}
+				coreTx.Rollback()
+				coreTx, err = chainKv.BeginRo(context.Background())
+				if err != nil {
+					panic(err)
+				}
+
+				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
+			}
+		}()
 	}
 	// Check if we have an already initialized chain and fall back to
 	// that if so. Otherwise we need to generate a new genesis spec.
@@ -254,6 +318,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		genesisHash:          genesis.Hash(),
 		waitForStageLoopStop: make(chan struct{}),
 		waitForMiningStop:    make(chan struct{}),
+		triggerVerkleCh:      triggerVerkle,
 		notifications: &stagedsync.Notifications{
 			Events:      privateapi.NewEvents(),
 			Accumulator: shards.NewAccumulator(chainConfig),
@@ -551,7 +616,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		headCh = make(chan *types.Block, 1)
 	}
 
-	backend.stagedSync, err = stages2.NewStagedSync(backend.sentryCtx, backend.chainDB, stack.Config().P2P, config, backend.sentriesClient, backend.notifications, backend.downloaderClient, allSnapshots, headCh, txNums, agg, backend.forkValidator)
+	backend.stagedSync, err = stages2.NewStagedSync(backend.sentryCtx, backend.chainDB, stack.Config().P2P, config, backend.sentriesClient, backend.notifications, backend.downloaderClient, allSnapshots, headCh, txNums, agg, backend.forkValidator, triggerVerkle)
 	if err != nil {
 		return nil, err
 	}
@@ -885,7 +950,7 @@ func (s *Ethereum) Start() error {
 	s.sentriesClient.StartStreamLoops(s.sentryCtx)
 	time.Sleep(10 * time.Millisecond) // just to reduce logs order confusion
 
-	go stages2.StageLoop(s.sentryCtx, s.chainDB, s.stagedSync, s.sentriesClient.Hd, s.notifications, s.sentriesClient.UpdateHead, s.waitForStageLoopStop, s.config.Sync.LoopThrottle)
+	go stages2.StageLoop(s.sentryCtx, s.chainDB, s.stagedSync, s.sentriesClient.Hd, s.notifications, s.sentriesClient.UpdateHead, s.waitForStageLoopStop, s.config.Sync.LoopThrottle, s.triggerVerkleCh)
 
 	return nil
 }
