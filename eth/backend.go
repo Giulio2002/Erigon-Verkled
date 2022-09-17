@@ -150,7 +150,7 @@ type Ethereum struct {
 	notifyMiningAboutNewTxs chan struct{}
 	forkValidator           *engineapi.ForkValidator
 	downloader              *downloader.Downloader
-	triggerVerkleCh         chan struct{}
+	triggerVerkleCh         chan uint64
 	verkleDb                kv.RwDB
 }
 
@@ -176,82 +176,8 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 	}
 
 	var currentBlock *types.Block
-	verkeDb, err := mdbx.Open("verkledb"+fmt.Sprintf("%d", i), log.Root(), false)
-	if err != nil {
-		return nil, err
-	}
 
-	triggerVerkle := make(chan struct{}, 1)
-	if config.ForceVerkle {
-		log.Info("Verkle tree will be built in the background forcefully")
-		// Go routine for verkle trees
-		go func() {
-			time.Sleep(1 * time.Second)
-			coreTx, err := chainKv.BeginRo(context.Background())
-			if err != nil {
-				panic(err)
-			}
-
-			tx, err := verkeDb.BeginRw(context.Background())
-			if err != nil {
-				panic(err)
-			}
-			if err := verkledb.InitDB(tx); err != nil {
-				panic(err)
-			}
-			for {
-				h, _ := rawdb.ReadCanonicalHash(tx, 0)
-				c, _ := rawdb.ReadChainConfig(tx, h)
-				currentBlockNumber, err := stages.GetStageProgress(coreTx, stages.Finish)
-				if err != nil {
-					panic(err)
-				}
-				if currentBlockNumber < c.MartinBlock.Uint64() {
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-				<-triggerVerkle
-				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
-				if err != nil {
-					return
-				}
-				root, err := verkledb.ReadVerkleRoot(tx, from-1)
-				if err != nil {
-					panic(err)
-				}
-				// TODO: new stage
-				// TODO: Start here
-				verkleTree := verkle.NewVerkleTree(tx, root)
-				var accRoot common.Hash
-				var storageRoot common.Hash
-
-				if accRoot, err = verkle.ProcessAccounts(coreTx, tx, verkleTree, from); err != nil {
-					panic(err)
-				}
-
-				if storageRoot, err = verkle.ProcessStorage(coreTx, tx, verkleTree, from, accRoot); err != nil {
-					panic(err)
-				}
-				// TODO: end here
-
-				// Commit to verkle db
-				if err = tx.Commit(); err != nil {
-					panic(err)
-				}
-				tx, err = verkeDb.BeginRw(context.Background())
-				if err != nil {
-					panic(err)
-				}
-				coreTx.Rollback()
-				coreTx, err = chainKv.BeginRo(context.Background())
-				if err != nil {
-					panic(err)
-				}
-
-				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
-			}
-		}()
-	}
+	triggerVerkle := make(chan uint64, 1)
 
 	// Check if we have an already initialized chain and fall back to
 	// that if so. Otherwise we need to generate a new genesis spec.
@@ -328,7 +254,6 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		config:               config,
 		log:                  logger,
 		chainDB:              chainKv,
-		verkleDb:             verkeDb,
 		networkID:            config.NetworkID,
 		etherbase:            config.Miner.Etherbase,
 		chainConfig:          chainConfig,
@@ -434,7 +359,20 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		log.Info("Verkle tree will be built in the background forcefully")
 		// Go routine for verkle trees
 		go func() {
-			coreTx, err := chainKv.BeginRo(context.Background())
+			coreTx, err := backend.chainDB.BeginRo(context.Background())
+			if err != nil {
+				panic(err)
+			}
+			h, _ := rawdb.ReadCanonicalHash(coreTx, 0)
+			currB := rawdb.ReadCurrentBlockNumber(coreTx)
+			ch, _ := rawdb.ReadChainConfig(coreTx, h)
+			if *currB >= ch.MartinBlock.Uint64()-2 {
+				coreTx.Rollback()
+
+				log.Info("Transition point detected, switching to verkle Trees")
+				return
+			}
+			verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
 			if err != nil {
 				panic(err)
 			}
@@ -445,7 +383,25 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 			if err := verkledb.InitDB(tx); err != nil {
 				panic(err)
 			}
+			logp := false
+
 			for {
+				curr := <-triggerVerkle
+				if curr < ch.PapiBlock.Uint64() {
+					fmt.Println("here")
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+				if curr >= ch.PapiBlock.Uint64() && logp {
+					log.Info("Verkle tree generation start now!")
+					logp = true
+				}
+				if curr >= ch.MartinBlock.Uint64()-2 {
+					tx.Rollback()
+					verkeDb.Close()
+					log.Info("Transition point detected, switching to verkle Trees")
+					return
+				}
 				<-triggerVerkle
 				from, err := stages.GetStageProgress(tx, stages.VerkleTrie)
 				if err != nil {
@@ -481,7 +437,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 					panic(err)
 				}
 
-				log.Info("Verkle tree is synced up", "root", storageRoot, "from", from)
+				log.Info("Verkle tree is synced up", "root", storageRoot, "lastBlockWithState", from)
 			}
 		}()
 	}
@@ -689,7 +645,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		headCh = make(chan *types.Block, 1)
 	}
 
-	backend.stagedSync, err = stages2.NewStagedSync(backend.sentryCtx, verkeDb, backend.chainDB, stack.Config().P2P, config, backend.sentriesClient, backend.notifications, backend.downloaderClient, allSnapshots, headCh, txNums, agg, backend.forkValidator, triggerVerkle)
+	backend.stagedSync, err = stages2.NewStagedSync(backend.sentryCtx, backend.chainDB, backend.chainDB, stack.Config().P2P, config, backend.sentriesClient, backend.notifications, backend.downloaderClient, allSnapshots, headCh, txNums, agg, backend.forkValidator, triggerVerkle)
 	if err != nil {
 		return nil, err
 	}
@@ -1036,7 +992,6 @@ func (s *Ethereum) Stop() error {
 	if s.downloader != nil {
 		s.downloader.Close()
 	}
-	s.verkleDb.Close()
 	if s.privateAPI != nil {
 		shutdownDone := make(chan bool)
 		go func() {

@@ -2,7 +2,6 @@ package verkle
 
 import (
 	"encoding/binary"
-	"fmt"
 	"time"
 
 	"github.com/ledgerwatch/log/v3"
@@ -110,8 +109,6 @@ func ProcessStorage(coreTx kv.Tx, tx kv.RwTx, writer *VerkleTree, from uint64, p
 	if err != nil {
 		return common.Hash{}, err
 	}
-	fmt.Println(blockNum)
 	stages.SaveStageProgress(tx, stages.VerkleTrie, blockNum)
-	fmt.Println("OOO", blockNum, root)
 	return root, verkledb.WriteVerkleRoot(tx, executionProgress, root)
 }

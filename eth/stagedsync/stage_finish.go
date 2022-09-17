@@ -28,10 +28,10 @@ type FinishCfg struct {
 	tmpDir        string
 	headCh        chan *types.Block
 	forkValidator *engineapi.ForkValidator
-	verkleCh      chan struct{}
+	verkleCh      chan uint64
 }
 
-func StageFinishCfg(db kv.RwDB, tmpDir string, headCh chan *types.Block, forkValidator *engineapi.ForkValidator, verkleCh chan struct{}) FinishCfg {
+func StageFinishCfg(db kv.RwDB, tmpDir string, headCh chan *types.Block, forkValidator *engineapi.ForkValidator, verkleCh chan uint64) FinishCfg {
 	return FinishCfg{
 		db:            db,
 		tmpDir:        tmpDir,

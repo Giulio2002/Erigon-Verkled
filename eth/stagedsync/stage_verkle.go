@@ -2,9 +2,9 @@ package stagedsync
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
 	"github.com/ledgerwatch/erigon/cmd/verkle-transition/verkle"
 	verkledb "github.com/ledgerwatch/erigon/cmd/verkle/verkle-db"
 	"github.com/ledgerwatch/erigon/common"
@@ -28,7 +28,7 @@ func StageVerkleCfg(
 ) VerkleCfg {
 	return VerkleCfg{
 		db:     db,
-		coreDb: db,
+		coreDb: coreDb,
 		tmpdir: tmpdir,
 		cfg:    cfg,
 	}
@@ -47,18 +47,24 @@ func SpawnVerkle(s *StageState, tx kv.RwTx, toBlock uint64, cfg VerkleCfg, ctx c
 	if err != nil {
 		return err
 	}
-	fmt.Println("aaa")
 
-	vTx, err := cfg.db.BeginRw(ctx)
+	if endBlock < cfg.cfg.MartinBlock.Uint64() {
+		return s.Update(tx, endBlock)
+	}
+
+	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)
 	if err != nil {
 		return err
 	}
-	defer vTx.Commit()
-
-	progress, err := stages.GetStageProgress(vTx, verkledb.VerkleTrie)
-	if endBlock < cfg.cfg.MartinBlock.Uint64() {
-		return s.Update(tx, progress)
+	defer verkeDb.Close()
+	vTx, err := verkeDb.BeginRw(ctx)
+	if err != nil {
+		return err
 	}
+	verkledb.InitDB(vTx)
+
+	defer vTx.Commit()
+	progress, err := stages.GetStageProgress(vTx, verkledb.VerkleTrie)
 
 	root, err := verkledb.ReadVerkleRoot(vTx, progress)
 	if err != nil {
@@ -82,7 +88,7 @@ func SpawnVerkle(s *StageState, tx kv.RwTx, toBlock uint64, cfg VerkleCfg, ctx c
 	}
 	// TODO: end here
 
-	log.Info("Verkle tree is synced up", "root", storageRoot, "from", progress)
+	log.Info("Verkle tree progress", "root", storageRoot, "lastStateDiff", progress)
 
 	if !useExternalTx {
 		if err = tx.Commit(); err != nil {

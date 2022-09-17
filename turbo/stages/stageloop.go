@@ -72,7 +72,7 @@ func StageLoop(
 	updateHead func(ctx context.Context, head uint64, hash common.Hash, td *uint256.Int),
 	waitForDone chan struct{},
 	loopMinTime time.Duration,
-	verkleCh chan struct{},
+	verkleCh chan uint64,
 ) {
 	defer close(waitForDone)
 	initialCycle := true
@@ -131,7 +131,7 @@ func StageLoopStep(
 	initialCycle bool,
 	updateHead func(ctx context.Context, head uint64, hash common.Hash, td *uint256.Int),
 	snapshotMigratorFinal func(tx kv.Tx) error,
-	verkleCh chan struct{},
+	verkleCh chan uint64,
 
 ) (headBlockHash common.Hash, err error) {
 	defer func() {
@@ -181,7 +181,7 @@ func StageLoopStep(
 			return headBlockHash, errTx
 		}
 		select {
-		case verkleCh <- struct{}{}:
+		case verkleCh <- origin:
 		default:
 		}
 		log.Info("Commit cycle", "in", time.Since(commitStart))
@@ -378,7 +378,7 @@ func NewStagedSync(ctx context.Context,
 	headCh chan *types.Block,
 	txNums *exec22.TxNums, agg *state.Aggregator22,
 	forkValidator *engineapi.ForkValidator,
-	verkleCh chan struct{},
+	verkleCh chan uint64,
 ) (*stagedsync.Sync, error) {
 	dirs := cfg.Dirs
 	var blockReader services.FullBlockReader
