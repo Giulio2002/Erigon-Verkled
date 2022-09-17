@@ -208,7 +208,7 @@ func DefaultStages(ctx context.Context, verkleDb kv.RwDB, sm prune.Mode, snapsho
 			ID:          stages.VerkleTrie,
 			Description: "Generate verkle trie",
 			Forward: func(firstCycle bool, badBlockUnwind bool, s *StageState, u Unwinder, tx kv.RwTx) error {
-				return SpawnVerkle(s, tx, 0, StageVerkleCfg(verkleDb, txLookup.db, exec.chainConfig, blockHashCfg.tmpDir), ctx)
+				return SpawnVerkle(s, tx, 0, StageVerkleCfg(verkleDb, txLookup.db, exec.chainConfig, blockHashCfg.tmpDir, finish.verkleCh), ctx)
 			},
 			Unwind: func(firstCycle bool, u *UnwindState, s *StageState, tx kv.RwTx) error {
 				return nil

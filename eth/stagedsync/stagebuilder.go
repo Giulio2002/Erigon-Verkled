@@ -2,7 +2,6 @@ package stagedsync
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ledgerwatch/erigon-lib/gointerfaces/remote"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -67,8 +66,7 @@ func MiningStages(
 			ID:          stages.IntermediateHashes,
 			Description: "Generate intermediate hashes and computing state root",
 			Forward: func(firstCycle bool, badBlockUnwind bool, s *StageState, u Unwinder, tx kv.RwTx) error {
-				if *rawdb.ReadCurrentBlockNumber(tx) >= params.AllCliqueProtocolChanges.MartinBlock.Uint64() {
-					fmt.Println("aaaa")
+				if *rawdb.ReadCurrentBlockNumber(tx) >= params.AllCliqueProtocolChanges.MartinBlock.Uint64()-2 {
 					return SpawnMiningExecVerkleStage(s, tx, execCfg, ctx)
 				}
 				stateRoot, err := SpawnIntermediateHashesStage(s, u, tx, trieCfg, ctx)

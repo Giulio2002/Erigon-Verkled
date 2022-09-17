@@ -16,10 +16,11 @@ import (
 )
 
 type VerkleCfg struct {
-	db     kv.RwDB
-	coreDb kv.RwDB
-	cfg    *params.ChainConfig
-	tmpdir string
+	db       kv.RwDB
+	coreDb   kv.RwDB
+	cfg      *params.ChainConfig
+	verkleCh chan uint64
+	tmpdir   string
 }
 
 func StageVerkleCfg(
@@ -27,12 +28,14 @@ func StageVerkleCfg(
 	coreDb kv.RwDB,
 	cfg *params.ChainConfig,
 	tmpdir string,
+	verkleCh chan uint64,
 ) VerkleCfg {
 	return VerkleCfg{
-		db:     db,
-		coreDb: coreDb,
-		tmpdir: tmpdir,
-		cfg:    cfg,
+		db:       db,
+		coreDb:   coreDb,
+		tmpdir:   tmpdir,
+		cfg:      cfg,
+		verkleCh: verkleCh,
 	}
 }
 
@@ -52,6 +55,10 @@ func SpawnVerkle(s *StageState, tx kv.RwTx, toBlock uint64, cfg VerkleCfg, ctx c
 
 	if endBlock < cfg.cfg.MartinBlock.Uint64() {
 		return s.Update(tx, endBlock)
+	}
+	select {
+	case cfg.verkleCh <- cfg.cfg.MartinBlock.Uint64():
+	default:
 	}
 
 	verkeDb, err := mdbx.Open("verkledb", log.Root(), false)

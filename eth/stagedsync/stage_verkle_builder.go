@@ -2,7 +2,6 @@ package stagedsync
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
@@ -49,7 +48,6 @@ func SpawnMiningExecVerkleStage(s *StageState, tx kv.RwTx, cfg MiningExecCfg, ct
 	if storageRoot, err = verkle.ProcessStorage(tx, vTx, verkleTree, from, accRoot); err != nil {
 		panic(err)
 	}
-	fmt.Println(storageRoot)
 	cfg.miningState.MiningBlock.Header.Root = storageRoot
 	return nil
 }
