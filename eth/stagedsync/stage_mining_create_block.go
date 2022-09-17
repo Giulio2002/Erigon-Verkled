@@ -236,14 +236,6 @@ func SpawnMiningCreateBlockStage(s *StageState, tx kv.RwTx, cfg MiningCreateBloc
 		return err
 	}
 
-	if cfg.blockBuilderParameters != nil {
-		header.MixDigest = cfg.blockBuilderParameters.PrevRandao
-
-		current.Header = header
-		current.Uncles = nil
-		return nil
-	}
-
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
 	if daoBlock := cfg.chainConfig.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
