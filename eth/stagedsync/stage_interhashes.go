@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/ledgerwatch/erigon/params"
 	"math/bits"
 
 	"github.com/ledgerwatch/erigon-lib/common/length"
@@ -74,6 +75,10 @@ func SpawnIntermediateHashesStage(s *StageState, u Unwinder, tx kv.RwTx, cfg Tri
 		return trie.EmptyRoot, err
 	}
 
+	// stop building Merkle Trees after PapiBlock
+	if s.BlockNumber >= params.AllCliqueProtocolChanges.PapiBlock.Uint64() {
+		return trie.EmptyRoot, nil
+	}
 	if s.BlockNumber == to {
 		// we already did hash check for this block
 		// we don't do the obvious `if s.BlockNumber > to` to support reorgs more naturally
